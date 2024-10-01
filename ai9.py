@@ -177,6 +177,8 @@ class UnionFind:
             self.rank[x] = self.available
             self.available += 1
 
+uf =UnionFind()
+
 class AIPlayer:
     def __init__(self, player_number: int, timer):
         """
@@ -197,8 +199,10 @@ class AIPlayer:
         self.selected_corner = 0
         self.second_corner = 0
         self.prev_state = None
+        self.last_move = None
         self.player_vc = []
         self.opponent_vc = []
+        self.union_find = uf
     
 
     def virtual_connection(self, state, move):
@@ -242,16 +246,20 @@ class AIPlayer:
             if neighbor in self.union_find.parent and self.union_find.find(neighbor) != self.union_find.find(move):
                 self.union_find.union(move, neighbor)
 
-    def get_connected_component_moves(self):
+    def get_connected_component_moves(self,state):
         """
         Retrieve all the moves in the connected component of the AI's most recent move.
         """
         # Find the root of the most recent move and gather all connected moves
         connected_moves = set()
+        print(self.union_find.parent)
+        if(self.last_move == None):
+            return
         for move in self.union_find.parent:
-            if self.union_find.find(move) == self.union_find.find(self.prev_state):
+            if self.union_find.find(move) == self.union_find.find(self.last_move):
                 connected_moves.add(move)
-        return connected_moves
+        print(connected_moves)
+        # return connected_moves
 
     def get_move(self, state: np.array) -> Tuple[int, int]:
         # time.sleep(3)
@@ -270,14 +278,18 @@ class AIPlayer:
             if(self.dim >= 8):
                 self.simulations *= 2
             self.corners = [(0,0),(0,self.dim-1),(0,2*(self.dim-1)),(self.dim-1,2*(self.dim-1)),(2*(self.dim-1),self.dim-1),(self.dim-1,0)]
-            print(self.corners)
             for i in range(6):
                 corner = self.corners[i]
                 if state[corner] == 1:  # Check if the corner is empty
                     self.selected_corner = (i+1)%6
+                    self.add_move_to_union_find(self.corners[(i+1)%6])
+                    self.get_connected_component_moves(state)
+                    self.last_move = self.corners[(i+1)%6]
                     return self.corners[(i+1)%6]
             self.selected_corner = 0
             self.add_move_to_union_find(self.corners[0])
+            self.get_connected_component_moves(state)
+            self.last_move = self.corners[0]
             return self.corners[0]
         if(self.move == 2):
             corner = self.corners[(self.selected_corner+2)%6]
@@ -286,6 +298,8 @@ class AIPlayer:
                 self.prev_state = state
                 self.second_corner = (self.selected_corner+2)%6
                 self.add_move_to_union_find(corner)
+                self.get_connected_component_moves(state)
+                self.last_move = corner
                 return corner
             else:
                 corner = self.corners[(self.selected_corner-2)%6]
@@ -293,6 +307,8 @@ class AIPlayer:
                 self.prev_state = state
                 self.second_corner = (self.selected_corner-2)%6
                 self.add_move_to_union_find(corner)
+                self.get_connected_component_moves(state)
+                self.last_move = corner
                 return corner
         
       
@@ -314,6 +330,8 @@ class AIPlayer:
             state[move] = 0  # Undo the move
             if is_win:
                 self.add_move_to_union_find(move)
+                self.get_connected_component_moves(state)
+                self.last_move = move
                 return move
 
         # Step 3: AI's two-move win detection
@@ -327,6 +345,8 @@ class AIPlayer:
                 if is_second_win:
                     state[move] = 0  # Undo first move
                     self.add_move_to_union_find(move)
+                    self.get_connected_component_moves(state)
+                    self.last_move = move
                     return move
             state[move] = 0  # Undo first move
 
@@ -341,6 +361,8 @@ class AIPlayer:
                 if is_second_win:
                     state[move] = 0  # Undo first move
                     self.add_move_to_union_find(move)
+                    self.get_connected_component_moves(state)
+                    self.last_move = move
                     return move
             state[move] = 0  # Undo first move
 
@@ -372,6 +394,8 @@ class AIPlayer:
                 if selected_move:
                     print(selected_move)
                     self.add_move_to_union_find(selected_move)
+                    self.get_connected_component_moves()
+                    self.last_move = selected_move
                     return selected_move
             else:
                 # Virtual connection for opponent
@@ -385,6 +409,8 @@ class AIPlayer:
                 if selected_move:
                     print(selected_move)
                     self.add_move_to_union_find(selected_move)
+                    self.get_connected_component_moves(state)
+                    self.last_move = selected_move
                     return selected_move
 
         elif decision == 1:  # Three-move win/loss detection
@@ -404,6 +430,7 @@ class AIPlayer:
                             state[second_move] = 0
                             state[move] = 0
                             self.add_move_to_union_find(move)
+                            self.last_move = move
                             return move
                     state[second_move] = 0
                 state[move] = 0
@@ -433,7 +460,9 @@ class AIPlayer:
         move_=tuple(zip(*np.where(state != best_state)))[0]
 
         self.add_move_to_union_find(move_)
-        return 
+        self.get_connected_component_moves(state)
+        self.last_move = move_
+        return move_
 
     def uct_search(self, root: MCTSNode):
         """
